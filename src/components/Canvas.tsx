@@ -1,11 +1,8 @@
+
 import React, { useRef, useEffect, useState } from "react";
 import { Shape, Point, Annotation, Tool } from "../types";
 import { drawShape, drawGrid, getCanvasCoordinates } from "../utils/drawing";
-import {
-  createShape,
-  updateShapePoints,
-  isPointInShape,
-} from "../utils/shapes";
+import { createShape, updateShapePoints, isPointInShape } from "../utils/shapes";
 
 interface CanvasProps {
   shapes: Shape[];
@@ -21,7 +18,7 @@ interface CanvasProps {
   onOffsetChange: (offset: Point) => void;
 }
 
-const Canvas: React.FC<CanvasProps> = ({
+function Canvas({
   shapes,
   annotations,
   currentTool,
@@ -33,19 +30,28 @@ const Canvas: React.FC<CanvasProps> = ({
   onAnnotationsChange,
   onSelectedShapeChange,
   onOffsetChange,
-}) => {
+}: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState<Shape | null>(null);
+  
+  // Panning state
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPoint, setLastPanPoint] = useState<Point>({ x: 0, y: 0 });
+  
+  // Selection state
+  const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<Point | null>(null);
+  
+  // Canvas size
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
 
   // Update canvas size when container resizes
   useEffect(() => {
-    const updateCanvasSize = () => {
+    function updateCanvasSize() {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         setCanvasSize({
@@ -53,16 +59,14 @@ const Canvas: React.FC<CanvasProps> = ({
           height: rect.height,
         });
       }
-    };
+    }
 
     updateCanvasSize();
     window.addEventListener("resize", updateCanvasSize);
     return () => window.removeEventListener("resize", updateCanvasSize);
   }, []);
 
-  const canvasWidth = canvasSize.width;
-  const canvasHeight = canvasSize.height;
-
+  // Draw everything on canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -71,74 +75,69 @@ const Canvas: React.FC<CanvasProps> = ({
     if (!ctx) return;
 
     // Clear canvas
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
 
-    // Draw grid
-    drawGrid(ctx, canvasWidth, canvasHeight, zoom, offset);
+    // Draw grid background
+    drawGrid(ctx, canvasSize.width, canvasSize.height, zoom, offset);
 
-    // Draw all shapes
+    // Draw all saved shapes
     shapes.forEach((shape) => {
-      const shapeWithSelection = {
-        ...shape,
-        selected: shape.id === selectedShapeId,
-      };
-      drawShape(ctx, shapeWithSelection, zoom, offset);
+      const isSelected = shape.id === selectedShapeId;
+      drawShape(ctx, { ...shape, selected: isSelected }, zoom, offset);
     });
 
-    // Draw current shape being drawn
+    // Draw shape being created
     if (currentShape) {
       drawShape(ctx, currentShape, zoom, offset);
     }
 
-    // Draw annotations
+    // Draw annotations if enabled
     if (showAnnotations) {
-      ctx.save();
-      ctx.translate(offset.x, offset.y);
-      ctx.scale(zoom, zoom);
-
-      annotations.forEach((annotation) => {
-        ctx.fillStyle = "#FCD34D";
-        ctx.font = "12px Inter, sans-serif";
-        ctx.fillRect(
-          annotation.x - 2,
-          annotation.y - 14,
-          ctx.measureText(annotation.text).width + 4,
-          16
-        );
-        ctx.fillStyle = "#1F2937";
-        ctx.fillText(annotation.text, annotation.x, annotation.y);
-      });
-
-      ctx.restore();
+      drawAnnotations(ctx, annotations, zoom, offset);
     }
-  }, [
-    shapes,
-    currentShape,
-    selectedShapeId,
-    annotations,
-    showAnnotations,
-    zoom,
-    offset,
-    canvasWidth,
-    canvasHeight,
-  ]);
+  }, [shapes, currentShape, selectedShapeId, annotations, showAnnotations, zoom, offset, canvasSize]);
 
-  const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  function drawAnnotations(ctx: CanvasRenderingContext2D, annotations: Annotation[], zoom: number, offset: Point) {
+    ctx.save();
+    ctx.translate(offset.x, offset.y);
+    ctx.scale(zoom, zoom);
+
+    annotations.forEach((annotation) => {
+      const textWidth = ctx.measureText(annotation.text).width;
+      
+      // Draw background
+      ctx.fillStyle = "#FCD34D";
+      ctx.fillRect(annotation.x - 2, annotation.y - 14, textWidth + 4, 16);
+      
+      // Draw text
+      ctx.fillStyle = "#1F2937";
+      ctx.font = "12px Inter, sans-serif";
+      ctx.fillText(annotation.text, annotation.x, annotation.y);
+    });
+
+    ctx.restore();
+  }
+
+  function handleMouseDown(event: React.MouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const point = getCanvasCoordinates(event, canvas, zoom, offset);
 
+    // Handle panning
     if (currentTool === "pan") {
       setIsPanning(true);
       setLastPanPoint({ x: event.clientX, y: event.clientY });
       return;
     }
 
+    // Handle selection and dragging
     if (currentTool === "select") {
       const clickedShape = shapes.find((shape) => isPointInShape(point, shape));
+      
       if (clickedShape) {
         onSelectedShapeChange(clickedShape.id);
+        setIsDragging(true);
         setDragStart(point);
       } else {
         onSelectedShapeChange(null);
@@ -146,6 +145,7 @@ const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
+    // Handle annotation creation
     if (currentTool === "annotate") {
       const text = prompt("Enter annotation text:");
       if (text) {
@@ -160,41 +160,42 @@ const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
-    // Start drawing
-    if (
-      ["line", "rectangle", "circle", "triangle", "freehand"].includes(
-        currentTool
-      )
-    ) {
+    // Handle shape drawing
+    if (["line", "rectangle", "circle", "triangle", "freehand"].includes(currentTool)) {
       setIsDrawing(true);
       const newShape = createShape(currentTool as Shape["type"], point);
       setCurrentShape(newShape);
     }
-  };
+  }
 
-  const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  function handleMouseMove(event: React.MouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Handle panning
     if (isPanning) {
       const deltaX = event.clientX - lastPanPoint.x;
       const deltaY = event.clientY - lastPanPoint.y;
+      
       onOffsetChange({
         x: offset.x + deltaX,
         y: offset.y + deltaY,
       });
+      
       setLastPanPoint({ x: event.clientX, y: event.clientY });
       return;
     }
 
     const point = getCanvasCoordinates(event, canvas, zoom, offset);
 
+    // Handle shape drawing
     if (isDrawing && currentShape) {
       const updatedShape = updateShapePoints(currentShape, point);
       setCurrentShape(updatedShape);
     }
 
-    if (currentTool === "select" && selectedShapeId && dragStart) {
+    // Handle shape dragging
+    if (isDragging && selectedShapeId && dragStart) {
       const deltaX = point.x - dragStart.x;
       const deltaY = point.y - dragStart.y;
 
@@ -214,56 +215,54 @@ const Canvas: React.FC<CanvasProps> = ({
       onShapesChange(updatedShapes);
       setDragStart(point);
     }
-  };
+  }
 
-  const handleMouseUp = () => {
+  function handleMouseUp() {
+    // Stop panning
     if (isPanning) {
       setIsPanning(false);
       return;
     }
 
+    // Finish drawing shape
     if (isDrawing && currentShape) {
       onShapesChange([...shapes, currentShape]);
       setCurrentShape(null);
       setIsDrawing(false);
     }
 
+    // Stop dragging
+    setIsDragging(false);
     setDragStart(null);
-  };
+  }
 
-  const handleKeyDown = (event: React.KeyboardEvent) => {
+  function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Delete" && selectedShapeId) {
-      const updatedShapes = shapes.filter(
-        (shape) => shape.id !== selectedShapeId
-      );
+      const updatedShapes = shapes.filter((shape) => shape.id !== selectedShapeId);
       onShapesChange(updatedShapes);
       onSelectedShapeChange(null);
     }
-  };
+  }
+
+  function getCursorStyle() {
+    if (currentTool === "pan") return "grab";
+    if (currentTool === "select") return "default";
+    return "crosshair";
+  }
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 bg-gray-950 overflow-hidden relative"
-    >
+    <div ref={containerRef} className="flex-1 bg-gray-950 overflow-hidden relative">
       <canvas
         ref={canvasRef}
-        width={canvasWidth}
-        height={canvasHeight}
-        className="cursor-crosshair bg-gray-900"
+        width={canvasSize.width}
+        height={canvasSize.height}
+        className="bg-gray-900"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onKeyDown={handleKeyDown}
         tabIndex={0}
-        style={{
-          cursor:
-            currentTool === "pan"
-              ? "grab"
-              : currentTool === "select"
-              ? "default"
-              : "crosshair",
-        }}
+        style={{ cursor: getCursorStyle() }}
       />
 
       {/* Zoom indicator */}
@@ -272,6 +271,6 @@ const Canvas: React.FC<CanvasProps> = ({
       </div>
     </div>
   );
-};
+}
 
 export default Canvas;

@@ -1,135 +1,159 @@
+
 import { Shape, Point } from '../types';
 
-export const createShape = (
+export function createShape(
   type: Shape['type'],
   startPoint: Point,
   color: string = '#3B82F6',
   strokeWidth: number = 2
-): Shape => ({
-  id: crypto.randomUUID(),
-  type,
-  points: [startPoint],
-  color,
-  strokeWidth,
-});
+): Shape {
+  return {
+    id: crypto.randomUUID(),
+    type,
+    points: [startPoint],
+    color,
+    strokeWidth,
+  };
+}
 
-export const updateShapePoints = (shape: Shape, newPoint: Point): Shape => {
+export function updateShapePoints(shape: Shape, newPoint: Point): Shape {
   switch (shape.type) {
     case 'line':
-      return { ...shape, points: [shape.points[0], newPoint] };
     case 'rectangle':
-      return { ...shape, points: [shape.points[0], newPoint] };
     case 'circle':
-      return { ...shape, points: [shape.points[0], newPoint] };
     case 'triangle':
+      // For these shapes, we only need start and end points
       return { ...shape, points: [shape.points[0], newPoint] };
+      
     case 'freehand':
+      // For freehand, add each point to create a continuous line
       return { ...shape, points: [...shape.points, newPoint] };
+      
     default:
       return shape;
   }
-};
+}
 
-export const isPointInShape = (point: Point, shape: Shape): boolean => {
+export function isPointInShape(point: Point, shape: Shape): boolean {
   const { points, type } = shape;
   
   switch (type) {
     case 'line':
-      if (points.length < 2) return false;
-      const [start, end] = points;
-      const distance = distanceToLine(point, start, end);
-      return distance < 10; // 10px tolerance
+      return isPointNearLine(point, points);
       
     case 'rectangle':
-      if (points.length < 2) return false;
-      const [topLeft, bottomRight] = points;
-      return point.x >= Math.min(topLeft.x, bottomRight.x) &&
-             point.x <= Math.max(topLeft.x, bottomRight.x) &&
-             point.y >= Math.min(topLeft.y, bottomRight.y) &&
-             point.y <= Math.max(topLeft.y, bottomRight.y);
-             
+      return isPointInRectangle(point, points);
+      
     case 'circle':
-      if (points.length < 2) return false;
-      const [center, edge] = points;
-      const radius = Math.sqrt(
-        Math.pow(edge.x - center.x, 2) + Math.pow(edge.y - center.y, 2)
-      );
-      const distanceFromCenter = Math.sqrt(
-        Math.pow(point.x - center.x, 2) + Math.pow(point.y - center.y, 2)
-      );
-      return Math.abs(distanceFromCenter - radius) < 10;
+      return isPointNearCircle(point, points);
 
     case 'triangle':
-      if (points.length < 2) return false;
-      const [triangleStart, triangleEnd] = points;
-      const width = triangleEnd.x - triangleStart.x;
-      const height = triangleEnd.y - triangleStart.y;
-      
-      // Triangle vertices
-      const centerX = triangleStart.x + width / 2;
-      const topY = triangleStart.y;
-      const bottomY = triangleStart.y + height;
-      const leftX = triangleStart.x;
-      const rightX = triangleEnd.x;
-      
-      const v1 = { x: centerX, y: topY };
-      const v2 = { x: leftX, y: bottomY };
-      const v3 = { x: rightX, y: bottomY };
-      
-      return isPointInTriangle(point, v1, v2, v3);
+      return isPointInTriangle(point, points);
       
     case 'freehand':
-      return points.some(p => 
-        Math.sqrt(Math.pow(point.x - p.x, 2) + Math.pow(point.y - p.y, 2)) < 10
-      );
+      return isPointNearFreehandLine(point, points);
       
     default:
       return false;
   }
-};
+}
 
-const distanceToLine = (point: Point, lineStart: Point, lineEnd: Point): number => {
+function isPointNearLine(point: Point, points: Point[]): boolean {
+  if (points.length < 2) return false;
+  
+  const [start, end] = points;
+  const distance = getDistanceToLine(point, start, end);
+  return distance < 10; // 10px tolerance
+}
+
+function isPointInRectangle(point: Point, points: Point[]): boolean {
+  if (points.length < 2) return false;
+  
+  const [topLeft, bottomRight] = points;
+  const minX = Math.min(topLeft.x, bottomRight.x);
+  const maxX = Math.max(topLeft.x, bottomRight.x);
+  const minY = Math.min(topLeft.y, bottomRight.y);
+  const maxY = Math.max(topLeft.y, bottomRight.y);
+  
+  return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
+}
+
+function isPointNearCircle(point: Point, points: Point[]): boolean {
+  if (points.length < 2) return false;
+  
+  const [center, edge] = points;
+  const radius = getDistance(center, edge);
+  const distanceFromCenter = getDistance(point, center);
+  
+  return Math.abs(distanceFromCenter - radius) < 10; // 10px tolerance
+}
+
+function isPointInTriangle(point: Point, points: Point[]): boolean {
+  if (points.length < 2) return false;
+  
+  const [start, end] = points;
+  const width = end.x - start.x;
+  const height = end.y - start.y;
+  
+  // Calculate triangle vertices
+  const top = { x: start.x + width / 2, y: start.y };
+  const bottomLeft = { x: start.x, y: start.y + height };
+  const bottomRight = { x: end.x, y: start.y + height };
+  
+  return isPointInsideTriangle(point, top, bottomLeft, bottomRight);
+}
+
+function isPointNearFreehandLine(point: Point, points: Point[]): boolean {
+  return points.some(p => getDistance(point, p) < 10);
+}
+
+function getDistanceToLine(point: Point, lineStart: Point, lineEnd: Point): number {
   const A = point.x - lineStart.x;
   const B = point.y - lineStart.y;
   const C = lineEnd.x - lineStart.x;
   const D = lineEnd.y - lineStart.y;
 
   const dot = A * C + B * D;
-  const lenSq = C * C + D * D;
+  const lengthSquared = C * C + D * D;
   
-  if (lenSq === 0) return Math.sqrt(A * A + B * B);
+  if (lengthSquared === 0) return Math.sqrt(A * A + B * B);
   
-  let param = dot / lenSq;
+  let param = dot / lengthSquared;
   param = Math.max(0, Math.min(1, param));
   
-  const xx = lineStart.x + param * C;
-  const yy = lineStart.y + param * D;
+  const closestX = lineStart.x + param * C;
+  const closestY = lineStart.y + param * D;
   
-  const dx = point.x - xx;
-  const dy = point.y - yy;
-  
-  return Math.sqrt(dx * dx + dy * dy);
-};
+  return getDistance(point, { x: closestX, y: closestY });
+}
 
-const isPointInTriangle = (point: Point, v1: Point, v2: Point, v3: Point): boolean => {
+function getDistance(point1: Point, point2: Point): number {
+  const dx = point1.x - point2.x;
+  const dy = point1.y - point2.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function isPointInsideTriangle(point: Point, v1: Point, v2: Point, v3: Point): boolean {
   const denom = (v2.y - v3.y) * (v1.x - v3.x) + (v3.x - v2.x) * (v1.y - v3.y);
   const a = ((v2.y - v3.y) * (point.x - v3.x) + (v3.x - v2.x) * (point.y - v3.y)) / denom;
   const b = ((v3.y - v1.y) * (point.x - v3.x) + (v1.x - v3.x) * (point.y - v3.y)) / denom;
   const c = 1 - a - b;
   
   return a >= 0 && b >= 0 && c >= 0;
-};
+}
 
-export const getShapeBounds = (shape: Shape): { x: number; y: number; width: number; height: number } => {
-  if (shape.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
+export function getShapeBounds(shape: Shape): { x: number; y: number; width: number; height: number } {
+  if (shape.points.length === 0) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
   
-  const xs = shape.points.map(p => p.x);
-  const ys = shape.points.map(p => p.y);
+  const xValues = shape.points.map(p => p.x);
+  const yValues = shape.points.map(p => p.y);
   
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
+  const minX = Math.min(...xValues);
+  const maxX = Math.max(...xValues);
+  const minY = Math.min(...yValues);
+  const maxY = Math.max(...yValues);
   
   return {
     x: minX,
@@ -137,4 +161,4 @@ export const getShapeBounds = (shape: Shape): { x: number; y: number; width: num
     width: maxX - minX,
     height: maxY - minY
   };
-};
+}

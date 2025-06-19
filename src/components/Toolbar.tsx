@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   MousePointer2, 
@@ -33,7 +34,7 @@ interface ToolbarProps {
   zoom: number;
 }
 
-const Toolbar: React.FC<ToolbarProps> = ({
+function Toolbar({
   currentTool,
   onToolChange,
   onUndo,
@@ -46,8 +47,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
   canUndo,
   canRedo,
   zoom
-}) => {
-  const tools = [
+}: ToolbarProps) {
+  
+  const drawingTools = [
     { id: 'select' as Tool, icon: MousePointer2, label: 'Select' },
     { id: 'line' as Tool, icon: Minus, label: 'Line' },
     { id: 'rectangle' as Tool, icon: Square, label: 'Rectangle' },
@@ -58,79 +60,102 @@ const Toolbar: React.FC<ToolbarProps> = ({
     { id: 'pan' as Tool, icon: Hand, label: 'Pan' },
   ];
 
+  function ToolButton({ tool }: { tool: typeof drawingTools[0] }) {
+    const Icon = tool.icon;
+    const isActive = currentTool === tool.id;
+    
+    return (
+      <button
+        onClick={() => onToolChange(tool.id)}
+        className={`
+          p-2 rounded-lg transition-all duration-200 group relative
+          ${isActive 
+            ? 'bg-blue-600 text-white shadow-lg' 
+            : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+          }
+        `}
+        title={tool.label}
+      >
+        <Icon size={20} />
+        <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+          {tool.label}
+        </span>
+      </button>
+    );
+  }
+
+  function ActionButton({ 
+    onClick, 
+    disabled = false, 
+    title, 
+    children, 
+    variant = 'default' 
+  }: { 
+    onClick: () => void;
+    disabled?: boolean;
+    title: string;
+    children: React.ReactNode;
+    variant?: 'default' | 'danger';
+  }) {
+    const baseClasses = "p-2 rounded-lg transition-all duration-200";
+    const variantClasses = variant === 'danger' 
+      ? "bg-red-700 text-white hover:bg-red-600"
+      : "bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white";
+    const disabledClasses = "disabled:opacity-50 disabled:cursor-not-allowed";
+    
+    return (
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`${baseClasses} ${variantClasses} ${disabledClasses}`}
+        title={title}
+      >
+        {children}
+      </button>
+    );
+  }
+
   return (
     <div className="bg-gray-900 border-b border-gray-700 p-4">
       <div className="flex items-center justify-between max-w-6xl mx-auto">
         {/* Drawing Tools */}
         <div className="flex items-center space-x-2">
-          {tools.map((tool) => {
-            const Icon = tool.icon;
-            return (
-              <button
-                key={tool.id}
-                onClick={() => onToolChange(tool.id)}
-                className={`
-                  p-2 rounded-lg transition-all duration-200 group relative
-                  ${currentTool === tool.id 
-                    ? 'bg-blue-600 text-white shadow-lg' 
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
-                  }
-                `}
-                title={tool.label}
-              >
-                <Icon size={20} />
-                <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  {tool.label}
-                </span>
-              </button>
-            );
-          })}
+          {drawingTools.map((tool) => (
+            <ToolButton key={tool.id} tool={tool} />
+          ))}
         </div>
 
         {/* Action Tools */}
         <div className="flex items-center space-x-2">
-          <button
-            onClick={onUndo}
-            disabled={!canUndo}
-            className="p-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-            title="Undo"
-          >
+          {/* Undo/Redo */}
+          <ActionButton onClick={onUndo} disabled={!canUndo} title="Undo">
             <Undo2 size={20} />
-          </button>
+          </ActionButton>
           
-          <button
-            onClick={onRedo}
-            disabled={!canRedo}
-            className="p-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-            title="Redo"
-          >
+          <ActionButton onClick={onRedo} disabled={!canRedo} title="Redo">
             <Redo2 size={20} />
-          </button>
+          </ActionButton>
 
+          {/* Separator */}
           <div className="w-px h-6 bg-gray-700" />
 
-          <button
-            onClick={onZoomIn}
-            className="p-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition-all duration-200"
-            title="Zoom In"
-          >
+          {/* Zoom Controls */}
+          <ActionButton onClick={onZoomIn} title="Zoom In">
             <ZoomIn size={20} />
-          </button>
+          </ActionButton>
           
           <span className="text-sm text-gray-400 min-w-[3rem] text-center">
             {Math.round(zoom * 100)}%
           </span>
           
-          <button
-            onClick={onZoomOut}
-            className="p-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition-all duration-200"
-            title="Zoom Out"
-          >
+          <ActionButton onClick={onZoomOut} title="Zoom Out">
             <ZoomOut size={20} />
-          </button>
+          </ActionButton>
 
+          {/* Separator */}
           <div className="w-px h-6 bg-gray-700" />
 
+          {/* Toggle Annotations */}
           <button
             onClick={onToggleAnnotations}
             className={`p-2 rounded-lg transition-all duration-200 ${
@@ -143,17 +168,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
             {showAnnotations ? <Eye size={20} /> : <EyeOff size={20} />}
           </button>
 
-          <button
-            onClick={onClear}
-            className="p-2 rounded-lg bg-red-700 text-white hover:bg-red-600 transition-all duration-200"
-            title="Clear All"
-          >
+          {/* Clear All */}
+          <ActionButton onClick={onClear} title="Clear All" variant="danger">
             <RotateCcw size={20} />
-          </button>
+          </ActionButton>
         </div>
       </div>
     </div>
   );
-};
+}
 
 export default Toolbar;

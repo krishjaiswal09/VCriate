@@ -1,7 +1,11 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Shape, Point, Annotation, Tool } from '../types';
-import { drawShape, drawGrid, getCanvasCoordinates } from '../utils/drawing';
-import { createShape, updateShapePoints, isPointInShape } from '../utils/shapes';
+import React, { useRef, useEffect, useState } from "react";
+import { Shape, Point, Annotation, Tool } from "../types";
+import { drawShape, drawGrid, getCanvasCoordinates } from "../utils/drawing";
+import {
+  createShape,
+  updateShapePoints,
+  isPointInShape,
+} from "../utils/shapes";
 
 interface CanvasProps {
   shapes: Shape[];
@@ -28,24 +32,42 @@ const Canvas: React.FC<CanvasProps> = ({
   onShapesChange,
   onAnnotationsChange,
   onSelectedShapeChange,
-  onOffsetChange
+  onOffsetChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState<Shape | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPoint, setLastPanPoint] = useState<Point>({ x: 0, y: 0 });
   const [dragStart, setDragStart] = useState<Point | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
 
-  // Canvas dimensions
-  const canvasWidth = 1200;
-  const canvasHeight = 800;
+  // Update canvas size when container resizes
+  useEffect(() => {
+    const updateCanvasSize = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setCanvasSize({
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+    };
+
+    updateCanvasSize();
+    window.addEventListener("resize", updateCanvasSize);
+    return () => window.removeEventListener("resize", updateCanvasSize);
+  }, []);
+
+  const canvasWidth = canvasSize.width;
+  const canvasHeight = canvasSize.height;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     // Clear canvas
@@ -55,10 +77,10 @@ const Canvas: React.FC<CanvasProps> = ({
     drawGrid(ctx, canvasWidth, canvasHeight, zoom, offset);
 
     // Draw all shapes
-    shapes.forEach(shape => {
+    shapes.forEach((shape) => {
       const shapeWithSelection = {
         ...shape,
-        selected: shape.id === selectedShapeId
+        selected: shape.id === selectedShapeId,
       };
       drawShape(ctx, shapeWithSelection, zoom, offset);
     });
@@ -73,18 +95,33 @@ const Canvas: React.FC<CanvasProps> = ({
       ctx.save();
       ctx.translate(offset.x, offset.y);
       ctx.scale(zoom, zoom);
-      
-      annotations.forEach(annotation => {
-        ctx.fillStyle = '#FCD34D';
-        ctx.font = '12px Inter, sans-serif';
-        ctx.fillRect(annotation.x - 2, annotation.y - 14, ctx.measureText(annotation.text).width + 4, 16);
-        ctx.fillStyle = '#1F2937';
+
+      annotations.forEach((annotation) => {
+        ctx.fillStyle = "#FCD34D";
+        ctx.font = "12px Inter, sans-serif";
+        ctx.fillRect(
+          annotation.x - 2,
+          annotation.y - 14,
+          ctx.measureText(annotation.text).width + 4,
+          16
+        );
+        ctx.fillStyle = "#1F2937";
         ctx.fillText(annotation.text, annotation.x, annotation.y);
       });
-      
+
       ctx.restore();
     }
-  }, [shapes, currentShape, selectedShapeId, annotations, showAnnotations, zoom, offset]);
+  }, [
+    shapes,
+    currentShape,
+    selectedShapeId,
+    annotations,
+    showAnnotations,
+    zoom,
+    offset,
+    canvasWidth,
+    canvasHeight,
+  ]);
 
   const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -92,14 +129,14 @@ const Canvas: React.FC<CanvasProps> = ({
 
     const point = getCanvasCoordinates(event, canvas, zoom, offset);
 
-    if (currentTool === 'pan') {
+    if (currentTool === "pan") {
       setIsPanning(true);
       setLastPanPoint({ x: event.clientX, y: event.clientY });
       return;
     }
 
-    if (currentTool === 'select') {
-      const clickedShape = shapes.find(shape => isPointInShape(point, shape));
+    if (currentTool === "select") {
+      const clickedShape = shapes.find((shape) => isPointInShape(point, shape));
       if (clickedShape) {
         onSelectedShapeChange(clickedShape.id);
         setDragStart(point);
@@ -109,14 +146,14 @@ const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
-    if (currentTool === 'annotate') {
-      const text = prompt('Enter annotation text:');
+    if (currentTool === "annotate") {
+      const text = prompt("Enter annotation text:");
       if (text) {
         const newAnnotation: Annotation = {
           id: crypto.randomUUID(),
           x: point.x,
           y: point.y,
-          text
+          text,
         };
         onAnnotationsChange([...annotations, newAnnotation]);
       }
@@ -124,9 +161,13 @@ const Canvas: React.FC<CanvasProps> = ({
     }
 
     // Start drawing
-    if (['line', 'rectangle', 'circle', 'triangle', 'freehand'].includes(currentTool)) {
+    if (
+      ["line", "rectangle", "circle", "triangle", "freehand"].includes(
+        currentTool
+      )
+    ) {
       setIsDrawing(true);
-      const newShape = createShape(currentTool as Shape['type'], point);
+      const newShape = createShape(currentTool as Shape["type"], point);
       setCurrentShape(newShape);
     }
   };
@@ -140,7 +181,7 @@ const Canvas: React.FC<CanvasProps> = ({
       const deltaY = event.clientY - lastPanPoint.y;
       onOffsetChange({
         x: offset.x + deltaX,
-        y: offset.y + deltaY
+        y: offset.y + deltaY,
       });
       setLastPanPoint({ x: event.clientX, y: event.clientY });
       return;
@@ -153,23 +194,23 @@ const Canvas: React.FC<CanvasProps> = ({
       setCurrentShape(updatedShape);
     }
 
-    if (currentTool === 'select' && selectedShapeId && dragStart) {
+    if (currentTool === "select" && selectedShapeId && dragStart) {
       const deltaX = point.x - dragStart.x;
       const deltaY = point.y - dragStart.y;
-      
-      const updatedShapes = shapes.map(shape => {
+
+      const updatedShapes = shapes.map((shape) => {
         if (shape.id === selectedShapeId) {
           return {
             ...shape,
-            points: shape.points.map(p => ({
+            points: shape.points.map((p) => ({
               x: p.x + deltaX,
-              y: p.y + deltaY
-            }))
+              y: p.y + deltaY,
+            })),
           };
         }
         return shape;
       });
-      
+
       onShapesChange(updatedShapes);
       setDragStart(point);
     }
@@ -191,44 +232,44 @@ const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === 'Delete' && selectedShapeId) {
-      const updatedShapes = shapes.filter(shape => shape.id !== selectedShapeId);
+    if (event.key === "Delete" && selectedShapeId) {
+      const updatedShapes = shapes.filter(
+        (shape) => shape.id !== selectedShapeId
+      );
       onShapesChange(updatedShapes);
       onSelectedShapeChange(null);
     }
   };
 
   return (
-    <div className="flex-1 bg-gray-950 overflow-hidden relative">
+    <div
+      ref={containerRef}
+      className="flex-1 bg-gray-950 overflow-hidden relative"
+    >
       <canvas
         ref={canvasRef}
         width={canvasWidth}
         height={canvasHeight}
-        className="border border-gray-700 cursor-crosshair bg-gray-900"
+        className="cursor-crosshair bg-gray-900"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onKeyDown={handleKeyDown}
         tabIndex={0}
         style={{
-          cursor: currentTool === 'pan' ? 'grab' : 
-                 currentTool === 'select' ? 'default' : 'crosshair'
+          cursor:
+            currentTool === "pan"
+              ? "grab"
+              : currentTool === "select"
+              ? "default"
+              : "crosshair",
         }}
       />
-      
+
       {/* Zoom indicator */}
       <div className="absolute bottom-4 right-4 bg-gray-800 text-gray-300 px-3 py-1 rounded-lg text-sm">
         Zoom: {Math.round(zoom * 100)}%
       </div>
-      
-      {/* Instructions */}
-      {/* <div className="absolute top-4 left-4 bg-gray-800 text-gray-300 p-3 rounded-lg text-sm max-w-sm">
-        <h3 className="font-semibold mb-2">Building Planner L2</h3>
-        <p className="text-xs leading-relaxed">
-          Select a tool and start drawing. Use the select tool to move and modify shapes. 
-          Add annotations to provide dimensions and notes. Press Delete to remove selected shapes.
-        </p>
-      </div> */}
     </div>
   );
 };

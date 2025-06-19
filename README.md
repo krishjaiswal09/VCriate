@@ -8,4 +8,4 @@ and then
 
 # npm run dev
 
-![Image](https://github.com/user-attachments/assets/5ad3ff0f-c61d-4fc7-a911-37c1e148e7ee)
+![Image](https://github.com/user-attachments/assets/ef8958bf-c881-4265-9f49-5d6f1061aafc)

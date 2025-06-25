@@ -77,7 +77,7 @@ function App() {
     <div className="h-screen flex flex-col bg-gray-900 text-white">
       {/* Header */}
       <div className="bg-gray-900 border-b border-gray-700 px-6 py-3">
-        <h1 className="text-xl font-bold text-white">Building Planner L2</h1>
+        <h1 className="text-xl font-bold text-white">Building Planner</h1>
         <p className="text-sm text-gray-400">Professional 2D Drawing & Annotation Tool</p>
       </div>
 
